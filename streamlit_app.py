@@ -18,21 +18,25 @@ def get_cfg():
 
 cfg = get_cfg()
 if not cfg["url"] or not cfg["key"]:
-    st.error("Supabase URL/Key not configured. Add them to `.streamlit/secrets.toml` or as env vars.")
+    st.error("Supabase URL/Key not configured. Add them in Streamlit Secrets or env vars.")
     st.stop()
 
 client = create_client(cfg["url"], cfg["key"])
+try:
+    client.postgrest.schema = cfg["schema"]
+except Exception:
+    pass
 
 @st.cache_data(ttl=60)
-def fetch_df(schema: str, table: str) -> pd.DataFrame:
-    data = client.table(table, schema=schema).select("customer_id, number_of_visits, last_visit_at").execute().data or []
+def fetch_df(table: str) -> pd.DataFrame:
+    data = client.table(table).select("customer_id, number_of_visits, last_visit_at").execute().data or []
     df = pd.DataFrame(data)
     if not df.empty:
         df["last_visit_at"] = pd.to_datetime(df["last_visit_at"], utc=True, errors="coerce")
         df["number_of_visits"] = pd.to_numeric(df.get("number_of_visits"), errors="coerce").fillna(0).astype(int)
     return df
 
-df = fetch_df(cfg["schema"], cfg["table"])
+df = fetch_df(cfg["table"])
 
 if df.empty:
     st.info("No customer records yet. Insert data to see metrics.")
@@ -82,4 +86,4 @@ with c8:
 st.divider()
 with st.expander("Preview (first 100 rows)"):
     st.dataframe(df[["customer_id","number_of_visits","last_visit_at","days_since_last"]].head(100), use_container_width=True)
-    st.caption("Note: 'days_since_last' is computed as UTC 'now' minus 'last_visit_at'.")
+    st.caption("UTC 'now' minus 'last_visit_at'.")
