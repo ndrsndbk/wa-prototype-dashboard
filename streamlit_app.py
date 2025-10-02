@@ -43,38 +43,106 @@ if df.empty:
     st.info("No customer records yet. Insert data to see metrics.")
     st.stop()
 
+# --- Helpers for periods & deltas ---
 now = pd.Timestamp.utcnow()
 df["days_since_last"] = (now - df["last_visit_at"]).dt.total_seconds() / 86400.0
 df["days_since_last"] = df["days_since_last"].fillna(10**9)
 
-last_7d  = df["days_since_last"] <= 7
-last_30d = df["days_since_last"] <= 30
+def in_window(lo_inclusive: float, hi_inclusive: float) -> pd.Series:
+    """Return mask for last-visit age strictly >lo and <=hi days ago.
+       Use lo=0 for 'within the last N days' (i.e., (0, N])."""
+    return (df["days_since_last"] > lo_inclusive) & (df["days_since_last"] <= hi_inclusive)
+
+def pct_delta(curr: int, prev: int) -> str | None:
+    """Format percent delta string for st.metric. No indicator if prev==0 or no change."""
+    if prev <= 0 or curr == prev:
+        return None
+    change = (curr - prev) / prev * 100.0
+    sign = "+" if change > 0 else "−"
+    return f"{sign}{abs(change):.0f}%"
+
+# --- Basic flags reused across metrics ---
 new_flag = df["number_of_visits"] == 1
 ret_flag = df["number_of_visits"] >= 2
-inactive_7  = df["days_since_last"] > 7
-inactive_30 = df["days_since_last"] > 30
 
-total_customers_all_time     = len(df)
-active_customers_last_30     = int(last_30d.sum())
-new_customers_last_30        = int((new_flag & last_30d).sum())
-returning_customers_last_7   = int((ret_flag & last_7d).sum())
-new_customers_last_7         = int((new_flag & last_7d).sum())
-inactive_customers_gt_30     = int(inactive_30.sum())
-inactive_customers_last_30   = inactive_customers_gt_30
-inactive_customers_last_7    = int(inactive_7.sum())
+# --- Period masks ---
+# 30-day current window: (0, 30], previous window: (30, 60]
+win30_now  = in_window(0, 30)
+win30_prev = in_window(30, 60)
 
+# 7-day current window: (0, 7], previous window: (7, 14]
+win7_now   = in_window(0, 7)
+win7_prev  = in_window(7, 14)
+
+# --- Metrics (current + previous where relevant) ---
+total_customers_all_time = len(df)
+
+# Active = visited within the window
+active_30_now  = int(win30_now.sum())
+active_30_prev = int(win30_prev.sum())
+
+# New = visit count ==1 AND visited within window (first-ever visit falls in the window)
+new_30_now  = int((new_flag & win30_now).sum())
+new_30_prev = int((new_flag & win30_prev).sum())
+
+# Returning = visit count >=2 AND visited within window
+returning_7_now  = int((ret_flag & win7_now).sum())
+returning_7_prev = int((ret_flag & win7_prev).sum())
+
+new_7_now  = int((new_flag & win7_now).sum())
+new_7_prev = int((new_flag & win7_prev).sum())
+
+# Inactive definitions (kept as your original logic)
+inactive_customers_gt_30   = int((df["days_since_last"] > 30).sum())
+inactive_customers_last_30 = inactive_customers_gt_30  # same as original
+inactive_customers_last_7  = int((df["days_since_last"] > 7).sum())
+
+# --- Layout & display ---
 c1, c2, c3, c4 = st.columns(4)
 c5, c6, c7, c8 = st.columns(4)
-with c1: st.metric("Total Customers (All Time)", total_customers_all_time)
-with c2: st.metric("Active Customers (Last 30 Days)", active_customers_last_30)
-with c3: st.metric("New Customers (Last 30 Days)", new_customers_last_30)
-with c4: st.metric("Returning Customers (Last 7 Days)", returning_customers_last_7)
-with c5: st.metric("New Customers (Last 7 Days)", new_customers_last_7)
-with c6: st.metric("Inactive Customers (Haven't Visited > 30 Days)", inactive_customers_gt_30)
-with c7: st.metric("Inactive Customers (Last 30 Days)", inactive_customers_last_30)
-with c8: st.metric("Inactive Customers (Last 7 Days)", inactive_customers_last_7)
+
+# Non-periodic (no delta)
+with c1:
+    st.metric("Total Customers (All Time)", total_customers_all_time)
+
+# Periodic (show delta vs previous matching window)
+with c2:
+    st.metric(
+        "Active Customers (Last 30 Days)",
+        active_30_now,
+        delta=pct_delta(active_30_now, active_30_prev)
+    )
+with c3:
+    st.metric(
+        "New Customers (Last 30 Days)",
+        new_30_now,
+        delta=pct_delta(new_30_now, new_30_prev)
+    )
+with c4:
+    st.metric(
+        "Returning Customers (Last 7 Days)",
+        returning_7_now,
+        delta=pct_delta(returning_7_now, returning_7_prev)
+    )
+with c5:
+    st.metric(
+        "New Customers (Last 7 Days)",
+        new_7_now,
+        delta=pct_delta(new_7_now, new_7_prev)
+    )
+
+# Non-periodic (no delta)
+with c6:
+    st.metric("Inactive Customers (Haven't Visited > 30 Days)", inactive_customers_gt_30)
+with c7:
+    st.metric("Inactive Customers (Last 30 Days)", inactive_customers_last_30)
+with c8:
+    st.metric("Inactive Customers (Last 7 Days)", inactive_customers_last_7)
 
 st.divider()
 with st.expander("Preview (first 100 rows)"):
-    st.dataframe(df[["customer_id","number_of_visits","last_visit_at","days_since_last"]].head(100), use_container_width=True)
+    st.dataframe(
+        df[["customer_id", "number_of_visits", "last_visit_at", "days_since_last"]].head(100),
+        use_container_width=True
+    )
     st.caption("UTC 'now' minus 'last_visit_at'.")
