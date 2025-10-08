@@ -4,6 +4,17 @@ import streamlit as st
 from supabase import create_client
 
 st.set_page_config(page_title="Your Customer Database", layout="wide")
+
+# --- Latex Formula ---
+st.markdown(
+    r"""
+    <div style="text-align: center; font-size: 20px; margin-top: -20px; margin-bottom: 10px;">
+    $$\textbf{Community Revenue} = (\# \text{ of Loyal Customers} \times \text{Frequency} \times \text{AOV}) + (\text{Referrals} \times \text{Conversion} \times \text{AOV})$$
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.title("🗂️ Your Customer Database")
 
 # --- Config ---
