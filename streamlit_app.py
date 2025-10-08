@@ -5,15 +5,17 @@ from supabase import create_client
 
 st.set_page_config(page_title="Your Customer Database", layout="wide")
 
-# --- Latex Formula ---
-st.markdown(
-    r"""
-    <div style="text-align: center; font-size: 20px; margin-top: -20px; margin-bottom: 10px;">
-    $$\textbf{Community Revenue} = (\# \text{ of Loyal Customers} \times \text{Frequency} \times \text{AOV}) + (\text{Referrals} \times \text{Conversion} \times \text{AOV})$$
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# --- Centered LaTeX formula above the title ---
+formula = r"""
+\textbf{Community Revenue}
+= (\#\ \text{of Loyal Customers} \times \text{Frequency} \times \text{AOV})
++ (\text{Referrals} \times \text{Conversion} \times \text{AOV})
+"""
+try:
+    st.latex(formula, width="stretch")
+except TypeError:
+    # Fallback for Streamlit versions without the `width` parameter
+    st.latex(formula)
 
 st.title("🗂️ Your Customer Database")
 
@@ -60,28 +62,28 @@ df["days_since_last"] = (now - df["last_visit_at"]).dt.total_seconds() / 86400.0
 df["days_since_last"] = df["days_since_last"].fillna(10**9)
 
 def in_window(lo_inclusive: float, hi_inclusive: float) -> pd.Series:
-    """Return mask for last-visit age strictly >lo and <=hi days ago.
+    """Mask for last-visit age > lo and <= hi days ago.
        Use lo=0 for 'within the last N days' (i.e., (0, N])."""
     return (df["days_since_last"] > lo_inclusive) & (df["days_since_last"] <= hi_inclusive)
 
 def pct_delta(curr: int, prev: int) -> str | None:
-    """Format percent delta string for st.metric. No indicator if prev==0 or no change."""
+    """Percent delta for st.metric. No indicator if prev==0 or no change."""
     if prev <= 0 or curr == prev:
         return None
     change = (curr - prev) / prev * 100.0
     sign = "+" if change > 0 else "−"
     return f"{sign}{abs(change):.0f}%"
 
-# --- Basic flags reused across metrics ---
+# --- Flags reused across metrics ---
 new_flag = df["number_of_visits"] == 1
 ret_flag = df["number_of_visits"] >= 2
 
 # --- Period masks ---
-# 30-day current window: (0, 30], previous window: (30, 60]
+# 30-day current window: (0, 30], previous: (30, 60]
 win30_now  = in_window(0, 30)
 win30_prev = in_window(30, 60)
 
-# 7-day current window: (0, 7], previous window: (7, 14]
+# 7-day current window: (0, 7], previous: (7, 14]
 win7_now   = in_window(0, 7)
 win7_prev  = in_window(7, 14)
 
@@ -92,7 +94,7 @@ total_customers_all_time = len(df)
 active_30_now  = int(win30_now.sum())
 active_30_prev = int(win30_prev.sum())
 
-# New = visit count ==1 AND visited within window (first-ever visit falls in the window)
+# New = visit count ==1 AND visited within window
 new_30_now  = int((new_flag & win30_now).sum())
 new_30_prev = int((new_flag & win30_prev).sum())
 
@@ -105,7 +107,7 @@ new_7_prev = int((new_flag & win7_prev).sum())
 
 # Inactive definitions (kept as your original logic)
 inactive_customers_gt_30   = int((df["days_since_last"] > 30).sum())
-inactive_customers_last_30 = inactive_customers_gt_30  # same as original
+inactive_customers_last_30 = inactive_customers_gt_30
 inactive_customers_last_7  = int((df["days_since_last"] > 7).sum())
 
 # --- Layout & display ---
@@ -116,7 +118,7 @@ c5, c6, c7, c8 = st.columns(4)
 with c1:
     st.metric("Total Customers (All Time)", total_customers_all_time)
 
-# Periodic (show delta vs previous matching window)
+# Periodic (delta vs previous matching window)
 with c2:
     st.metric(
         "Active Customers (Last 30 Days)",
