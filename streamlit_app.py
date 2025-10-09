@@ -14,8 +14,48 @@ formula = r"""
 try:
     st.latex(formula, width="stretch")
 except TypeError:
-    # Fallback for Streamlit versions without the `width` parameter
+    # Fallback for older Streamlit versions without the `width` parameter
     st.latex(formula)
+
+# --- Simple interactive demo (first term by default; referrals optional) ---
+with st.container(border=True):
+    st.subheader("Community Revenue Demo")
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        loyal_customers = st.number_input(
+            "Loyal Customers",
+            min_value=0, value=100, step=10, help="Default per your spec."
+        )
+    with c2:
+        frequency = st.slider(
+            "Returning Customer Frequency",
+            min_value=0, max_value=30, value=1, step=1,
+            help="Times per period (demo default = 1)."
+        )
+    with c3:
+        aov = st.number_input(
+            "Average Order Value ($)",
+            min_value=0.0, value=1.0, step=0.5, format="%.2f",
+            help="Default per your spec."
+        )
+
+    # Optional second-term controls (default to 0 impact)
+    with st.expander("Optional: Include referrals term"):
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            referrals = st.number_input("Referrals (count)", min_value=0, value=0, step=10)
+        with cc2:
+            conversion = st.number_input("Conversion Rate (0–1)", min_value=0.0, max_value=1.0, value=0.0, step=0.05)
+
+    revenue_first = loyal_customers * frequency * aov
+    revenue_second = referrals * conversion * aov
+    revenue_total = revenue_first + revenue_second
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("First Term", f"${revenue_first:,.2f}")
+    m2.metric("Referrals Term", f"${revenue_second:,.2f}")
+    m3.metric("Estimated Community Revenue", f"${revenue_total:,.2f}")
 
 st.title("🗂️ Your Customer Database")
 
